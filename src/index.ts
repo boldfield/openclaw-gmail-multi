@@ -32,7 +32,9 @@ export default definePluginEntry({
 
     // Build process configs
     const gatewayPort = Number(process.env.OPENCLAW_GATEWAY_PORT) || 18789;
-    const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN ?? "";
+    const globalConfig = api.config as Record<string, unknown>;
+    const hooksConfig = (globalConfig?.hooks ?? {}) as Record<string, unknown>;
+    const hooksToken = (hooksConfig?.token as string) ?? process.env.OPENCLAW_GATEWAY_TOKEN ?? "";
 
     const processConfigs: ProcessConfig[] = Object.entries(config.accounts).map(
       ([accountKey, account]) => ({
@@ -44,7 +46,7 @@ export default definePluginEntry({
         includeBody: account.gog.includeBody,
         maxBytes: account.gog.maxBytes,
         hookUrl: `http://localhost:${gatewayPort}/hooks/gmail-multi-${accountKey}`,
-        hookToken: gatewayToken,
+        hookToken: hooksToken,
       })
     );
 
