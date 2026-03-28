@@ -2,11 +2,18 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { parseConfig } from "./config.js";
 import { ProcessManager, type ProcessConfig } from "./process-manager.js";
 
+let activeManager: ProcessManager | null = null;
+
 export default definePluginEntry({
   id: "openclaw-gmail-multi",
   name: "Gmail Multi-Account",
   description: "Multi-account Gmail integration with prompt-driven pipelines",
   register(api) {
+    if (activeManager) {
+      api.logger.info("openclaw-gmail-multi: already running, skipping duplicate register");
+      return;
+    }
+
     let config;
     try {
       config = parseConfig(api.pluginConfig);
@@ -43,6 +50,7 @@ export default definePluginEntry({
 
     // Start all gog child processes
     const processManager = new ProcessManager(api.logger);
+    activeManager = processManager;
     processManager.startAll(processConfigs);
 
     // Register shutdown handler
