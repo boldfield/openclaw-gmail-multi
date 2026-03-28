@@ -3,20 +3,12 @@ export interface GogConfig {
   maxBytes: number;
 }
 
-export interface HookConfig {
-  model?: string;
-  thinking?: string;
-  sessionKey: string;
-  prompt: string;
-}
-
 export interface AccountConfig {
   email: string;
   port: number;
   pubsubPath: string;
   token: string;
   gog: GogConfig;
-  hooks: Record<string, HookConfig>;
 }
 
 export interface PluginConfig {
@@ -78,50 +70,12 @@ export function parseConfig(raw: unknown): PluginConfig {
       maxBytes: typeof rawGog.maxBytes === "number" ? rawGog.maxBytes : 20000,
     };
 
-    // Parse hooks
-    const rawHooks = acc.hooks;
-    if (!rawHooks || typeof rawHooks !== "object") {
-      throw new Error(`Account '${key}' must have a 'hooks' object`);
-    }
-
-    const hookEntries = Object.entries(rawHooks as Record<string, unknown>);
-    if (hookEntries.length === 0) {
-      throw new Error(`Account '${key}' must have at least one hook`);
-    }
-
-    const hooks: Record<string, HookConfig> = {};
-    for (const [hookName, hookValue] of hookEntries) {
-      if (!hookValue || typeof hookValue !== "object") {
-        throw new Error(`Hook '${hookName}' in account '${key}' must be an object`);
-      }
-
-      const h = hookValue as Record<string, unknown>;
-      if (typeof h.sessionKey !== "string" || !h.sessionKey) {
-        throw new Error(
-          `Hook '${hookName}' in account '${key}' must have a non-empty 'sessionKey' string`
-        );
-      }
-      if (typeof h.prompt !== "string" || !h.prompt) {
-        throw new Error(
-          `Hook '${hookName}' in account '${key}' must have a non-empty 'prompt' string`
-        );
-      }
-
-      hooks[hookName] = {
-        sessionKey: h.sessionKey as string,
-        prompt: h.prompt as string,
-        ...(typeof h.model === "string" ? { model: h.model } : {}),
-        ...(typeof h.thinking === "string" ? { thinking: h.thinking } : {}),
-      };
-    }
-
     accounts[key] = {
       email: acc.email as string,
       port: acc.port as number,
       pubsubPath: acc.pubsubPath as string,
       token: acc.token as string,
       gog,
-      hooks,
     };
   }
 

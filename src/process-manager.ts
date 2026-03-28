@@ -14,6 +14,7 @@ export interface ProcessConfig {
 
 interface Logger {
   info(msg: string): void;
+  warn(msg: string): void;
   error(msg: string): void;
 }
 
