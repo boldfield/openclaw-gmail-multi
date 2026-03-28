@@ -1,0 +1,45 @@
+{
+  "id": "openclaw-gmail-multi",
+  "name": "Gmail Multi-Account",
+  "description": "Multi-account Gmail integration with prompt-driven pipelines, replacing built-in hooks.gmail",
+  "config": {
+    "type": "object",
+    "properties": {
+      "accounts": {
+        "type": "object",
+        "description": "Map of account key to account config",
+        "additionalProperties": {
+          "type": "object",
+          "required": ["email", "port", "pubsubPath", "token", "hooks"],
+          "properties": {
+            "email": { "type": "string", "description": "Gmail address" },
+            "port": { "type": "integer", "description": "Port for gog watch serve" },
+            "pubsubPath": { "type": "string", "description": "HTTP path for Pub/Sub push" },
+            "token": { "type": "string", "description": "Shared token for Pub/Sub validation" },
+            "gog": {
+              "type": "object",
+              "properties": {
+                "includeBody": { "type": "boolean", "default": true },
+                "maxBytes": { "type": "integer", "default": 20000 }
+              }
+            },
+            "hooks": {
+              "type": "object",
+              "description": "Map of hook name to hook config",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["sessionKey", "prompt"],
+                "properties": {
+                  "model": { "type": "string" },
+                  "thinking": { "type": "string" },
+                  "sessionKey": { "type": "string" },
+                  "prompt": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

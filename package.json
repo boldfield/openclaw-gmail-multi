@@ -1,0 +1,16 @@
+{
+  "name": "@boldfield/openclaw-gmail-multi",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Multi-account Gmail integration plugin for OpenClaw",
+  "openclaw": {
+    "extensions": ["./src/index.ts"]
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
