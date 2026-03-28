@@ -18,6 +18,11 @@ export default definePluginEntry({
     const accountCount = Object.keys(config.accounts).length;
     api.logger.info(`openclaw-gmail-multi: ${accountCount} account(s) configured`);
 
+    if (accountCount === 0) {
+      api.logger.warn("openclaw-gmail-multi: no accounts configured, nothing to do");
+      return;
+    }
+
     // Build process configs
     const gatewayPort = Number(process.env.OPENCLAW_GATEWAY_PORT) || 18789;
     const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN ?? "";

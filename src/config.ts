@@ -17,19 +17,19 @@ export interface PluginConfig {
 
 export function parseConfig(raw: unknown): PluginConfig {
   if (!raw || typeof raw !== "object") {
-    throw new Error("Plugin config must be an object");
+    return { accounts: {} };
   }
 
   const obj = raw as Record<string, unknown>;
   const rawAccounts = obj.accounts;
 
   if (!rawAccounts || typeof rawAccounts !== "object") {
-    throw new Error("Plugin config must have an 'accounts' object");
+    return { accounts: {} };
   }
 
   const accountEntries = Object.entries(rawAccounts as Record<string, unknown>);
   if (accountEntries.length === 0) {
-    throw new Error("Plugin config must have at least one account");
+    return { accounts: {} };
   }
 
   const seenPorts = new Map<number, string>();
