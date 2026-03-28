@@ -9,7 +9,7 @@ export default definePluginEntry({
   register(api) {
     let config;
     try {
-      config = parseConfig(api.config);
+      config = parseConfig(api.pluginConfig);
     } catch (err) {
       api.logger.error(`openclaw-gmail-multi: config error: ${err}`);
       return;
