@@ -2,7 +2,7 @@
   "id": "openclaw-gmail-multi",
   "name": "Gmail Multi-Account",
   "description": "Multi-account Gmail integration with prompt-driven pipelines, replacing built-in hooks.gmail",
-  "config": {
+  "configSchema": {
     "type": "object",
     "properties": {
       "accounts": {
