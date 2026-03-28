@@ -2,7 +2,7 @@
 
 Multi-account Gmail integration plugin for [OpenClaw](https://github.com/boldfield/openclaw). Replaces the built-in `hooks.gmail` with a flexible, prompt-driven pipeline that supports multiple Gmail accounts. Delegates to [`gog`](https://github.com/boldfield/gog) CLI for OAuth, Gmail Watch API, and Pub/Sub handling.
 
-Each configured account gets its own `gog gmail watch serve` child process. Incoming emails are routed through configurable hook handlers that render prompt templates and dispatch them to agent sessions — enabling multi-stage LLM pipelines (e.g., Haiku classifies, Sonnet handles).
+Each configured account gets its own `gog gmail watch serve` child process. Incoming emails are routed to agent sessions via openclaw's built-in `hooks.mappings` configuration — enabling multi-stage LLM pipelines (e.g., Haiku classifies, Sonnet handles).
 
 ## Installation
 
@@ -50,7 +50,9 @@ Add a `sync-plugins` init container to your openclaw deployment:
 
 ## Configuration
 
-Add the plugin config to your `openclaw.json`:
+The plugin config in `openclaw.json` defines accounts with their `gog` settings. Hook routing is configured separately in the `hooks.mappings` section of `openclaw.json`.
+
+### Plugin config
 
 ```json
 {
@@ -58,37 +60,64 @@ Add the plugin config to your `openclaw.json`:
     "openclaw-gmail-multi": {
       "accounts": {
         "personal": {
-          "email": "user@gmail.com",
+          "email": "brian.oldfield@gmail.com",
           "port": 8788,
-          "pubsubPath": "/gmail-pubsub-personal",
-          "token": "your-pubsub-validation-token",
+          "pubsubPath": "/gmail-pubsub",
+          "token": "abc123",
           "gog": {
             "includeBody": true,
             "maxBytes": 20000
-          },
-          "hooks": {
-            "incoming": {
-              "sessionKey": "gmail-classifier-personal",
-              "model": "claude-haiku-4-5-20251001",
-              "prompt": "You received a new email on {{account.email}}.\n\nFrom: {{from}}\nSubject: {{subject}}\nDate: {{date}}\n\n=== BEGIN UNTRUSTED EMAIL ===\n{{body}}\n=== END UNTRUSTED EMAIL ==="
-            }
           }
         },
-        "work": {
-          "email": "user@company.com",
+        "oldfield": {
+          "email": "brian@oldfield.io",
           "port": 8789,
-          "pubsubPath": "/gmail-pubsub-work",
-          "token": "another-validation-token",
-          "hooks": {
-            "incoming": {
-              "sessionKey": "gmail-classifier-work",
-              "model": "claude-haiku-4-5-20251001",
-              "prompt": "New work email on {{account.email}}.\n\nFrom: {{from}}\nSubject: {{subject}}\n\n=== BEGIN UNTRUSTED EMAIL ===\n{{body}}\n=== END UNTRUSTED EMAIL ==="
-            }
-          }
+          "pubsubPath": "/gmail-pubsub-oldfield",
+          "token": "def456"
         }
       }
     }
+  }
+}
+```
+
+### Hook routing via hooks.mappings
+
+Each `gog` process posts webhook payloads to `http://localhost:<gatewayPort>/hooks/gmail-multi-<accountKey>`. Configure `hooks.mappings` in `openclaw.json` to route these to agent sessions:
+
+```json
+{
+  "hooks": {
+    "mappings": [
+      {
+        "id": "gmail-personal-classify",
+        "match": { "path": "gmail-multi-personal" },
+        "action": "agent",
+        "wakeMode": "now",
+        "model": "claude-haiku-4-5-20251001",
+        "thinking": "off",
+        "sessionKey": "gmail-personal-classify",
+        "messageTemplate": "You are a Gmail classifier...\n\nEmail message ID: {{messages[0].id}}\n...",
+        "allowUnsafeExternalContent": true
+      },
+      {
+        "id": "gmail-personal-important",
+        "match": { "path": "gmail-important" },
+        "action": "agent",
+        "wakeMode": "now",
+        "model": "claude-sonnet-4-6",
+        "sessionKey": "gmail-personal-important",
+        "messageTemplate": "Important email flagged by classifier.\n\nEmail ID: {{msgId}}\nAccount: brian.oldfield@gmail.com\n..."
+      },
+      {
+        "id": "gmail-oldfield-classify",
+        "match": { "path": "gmail-multi-oldfield" },
+        "action": "agent",
+        "wakeMode": "now",
+        "sessionKey": "gmail-oldfield-triage",
+        "messageTemplate": "..."
+      }
+    ]
   }
 }
 ```
@@ -103,10 +132,21 @@ Add the plugin config to your `openclaw.json`:
 | `token` | Yes | Shared secret for Pub/Sub push validation |
 | `gog.includeBody` | No | Include email body in hook payload (default: `true`) |
 | `gog.maxBytes` | No | Max bytes for email body (default: `20000`) |
-| `hooks.<name>.sessionKey` | Yes | Agent session key for dispatching prompts |
-| `hooks.<name>.prompt` | Yes | Prompt template (supports `{{variable}}` substitution) |
-| `hooks.<name>.model` | No | Model override for the agent session |
-| `hooks.<name>.thinking` | No | Thinking mode override |
+
+### hooks.mappings fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id` | Yes | Unique identifier for the mapping |
+| `match.path` | Yes | Matches the hook path (e.g., `gmail-multi-personal`) |
+| `action` | Yes | Action type (e.g., `agent`) |
+| `wakeMode` | No | When to wake the session (e.g., `now`) |
+| `sessionKey` | Yes | Agent session key |
+| `model` | No | Model for the agent session |
+| `thinking` | No | Thinking mode (`off`, etc.) |
+| `messageTemplate` | Yes | Prompt template with `{{variable}}` substitution |
+| `deliver` | No | Delivery options |
+| `allowUnsafeExternalContent` | No | Allow untrusted content in templates |
 
 ## Disabling built-in hooks.gmail
 
@@ -118,46 +158,17 @@ Add the plugin config to your `openclaw.json`:
 
 1. **GCP Pub/Sub**: Create a topic and push subscription pointing to `https://<your-host>/<pubsubPath>?token=<token>`
 2. **Auth**: Run `gog auth add <email> --services gmail` to complete the OAuth flow
-3. **Config**: Add the account to the `plugins.openclaw-gmail-multi.accounts` section in `openclaw.json`
-4. **K8s**: Add a service port, container port, and tailscale funnel route for the new account's `pubsubPath`
-5. **Apply**: `kubectl apply` and restart the openclaw deployment
-
-## Pipeline examples
-
-### Two-stage classifier pattern
-
-**Stage 1 — Haiku classifies:**
-
-```json
-{
-  "incoming": {
-    "sessionKey": "gmail-classifier",
-    "model": "claude-haiku-4-5-20251001",
-    "prompt": "You are an email classifier for {{account.email}}.\n\nClassify this email and take action:\n- IMPORTANT: Forward to the important-handler hook via curl\n- ROUTINE: Mark as read\n- SPAM: Archive and mark as read\n\nFrom: {{from}}\nSubject: {{subject}}\nDate: {{date}}\nMessage ID: {{msgId}}\n\n=== BEGIN UNTRUSTED EMAIL ===\n{{body}}\n=== END UNTRUSTED EMAIL ===\n\nTo forward to the important handler:\ncurl -X POST http://localhost:18789/hooks/gmail-multi/personal/important \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"msgId\": \"{{msgId}}\", \"from\": \"{{from}}\", \"subject\": \"{{subject}}\", \"body\": \"...summary...\"}'"
-  }
-}
-```
-
-**Stage 2 — Sonnet handles important emails:**
-
-```json
-{
-  "important": {
-    "sessionKey": "gmail-important",
-    "model": "claude-sonnet-4-6",
-    "prompt": "An important email was flagged for {{account.email}}.\n\nFrom: {{from}}\nSubject: {{subject}}\nMessage ID: {{msgId}}\n\n{{body}}\n\nPlease draft a summary and notify via Slack."
-  }
-}
-```
+3. **Plugin config**: Add the account to `plugins.openclaw-gmail-multi.accounts` in `openclaw.json`
+4. **Hook mappings**: Add `hooks.mappings` entries for the new account's hook path (`gmail-multi-<accountKey>`)
+5. **K8s**: Add a service port, container port, and tailscale funnel route for the new account's `pubsubPath`
+6. **Apply**: `kubectl apply` and restart the openclaw deployment
 
 ## Template variables
 
-All fields from the `gog` webhook payload are available at the top level. Additionally:
+Template variables in `hooks.mappings.messageTemplate` come from the `gog` webhook payload and are rendered by openclaw's built-in template engine. Available fields:
 
 | Variable | Description |
 |----------|-------------|
-| `{{account.email}}` | Email address of the account |
-| `{{account.key}}` | Account key from config (e.g., `personal`) |
 | `{{from}}` | Sender address |
 | `{{to}}` | Recipient address |
 | `{{subject}}` | Email subject |
@@ -166,14 +177,13 @@ All fields from the `gog` webhook payload are available at the top level. Additi
 | `{{threadId}}` | Gmail thread ID |
 | `{{body}}` | Email body (if `includeBody` is enabled) |
 | `{{snippet}}` | Gmail snippet |
+| `{{messages[0].id}}` | First message ID from the payload |
 
 Dot-path and bracket notation are supported: `{{messages[0].from}}`, `{{headers.subject}}`.
 
-Missing variables resolve to an empty string — templates never throw on undefined values.
-
 ## Security note
 
-Always wrap untrusted email content in boundary markers in your prompts:
+Always wrap untrusted email content in boundary markers in your message templates:
 
 ```
 === BEGIN UNTRUSTED EMAIL ===
